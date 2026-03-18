@@ -40,10 +40,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ isLoading: true, error: null });
 
       // Check for existing session in SecureStore (persisted from a previous pairing)
+      console.log('[AuthDebug] initialize: calling getSession()...');
       const {
         data: { session },
         error,
       } = await supabase.auth.getSession();
+
+      console.log(
+        '[AuthDebug] initialize: getSession() returned:',
+        session
+          ? `session exists, expires_at=${session.expires_at}, refresh=${session.refresh_token?.slice(0, 8)}...`
+          : 'null',
+        error ? `error: ${error.message}` : 'no error'
+      );
 
       if (error) throw error;
 
@@ -52,9 +61,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // This must happen before isLoading is set to false to prevent
       // routing from redirecting to tabs with the stale session.
       if (initialUrl?.includes('code=') && session) {
+        console.log('[AuthDebug] initialize: re-pairing detected, signing out old session');
         await supabase.auth.signOut({ scope: 'local' });
         set({ session: null, user: null, isPaired: false, isLoading: false });
       } else {
+        console.log(`[AuthDebug] initialize: setting isPaired=${!!session}`);
         set({
           session,
           user: session?.user ?? null,
@@ -65,7 +76,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Listen for auth changes (token refresh, re-pairing, etc.)
       // Registered once regardless of path above
-      supabase.auth.onAuthStateChange((_event, newSession) => {
+      supabase.auth.onAuthStateChange((event, newSession) => {
+        console.log(
+          `[AuthDebug] onAuthStateChange: event=${event}, session=${newSession ? 'exists' : 'null'}, setting isPaired=${!!newSession}`
+        );
         set({
           session: newSession,
           user: newSession?.user ?? null,
